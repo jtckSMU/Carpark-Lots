@@ -269,34 +269,6 @@ export const CarparkDetailModal: React.FC<CarparkDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Amenities chips with icons */}
-              <div>
-                <h4 className="text-[11px] font-bold text-[#737685] uppercase tracking-wider mb-1.5">
-                  Amenities
-                </h4>
-                <div className="flex flex-wrap gap-1.5">
-                  {carpark.amenities.map((item) => (
-                    <span
-                      key={item}
-                      className="px-2 py-0.5 bg-[#eeeef0] text-[#1a1c1e] rounded-lg text-xs font-medium flex items-center gap-1"
-                    >
-                      <span className="material-symbols-outlined text-[13px] text-[#003d9b]">
-                        check
-                      </span>
-                      {item}
-                    </span>
-                  ))}
-                  {carpark.cctvSecurity && (
-                    <span className="px-2 py-0.5 bg-[#eeeef0] text-[#1a1c1e] rounded-lg text-xs font-medium flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[13px] text-[#006d43]">
-                        videocam
-                      </span>
-                      CCTV
-                    </span>
-                  )}
-                </div>
-              </div>
-
               {/* User Custom Note Field */}
               <div className="p-2.5 bg-[#fff8e1] rounded-xl border border-[#ffe082]">
                 <div className="flex items-center justify-between mb-1">
