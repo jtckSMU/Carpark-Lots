@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import { INITIAL_CARPARKS } from "./src/data/carparks";
 import { findCsvRate } from "./src/data/csvRatesData";
+import { classify } from "./src/utils/classify";
 
 dotenv.config();
 
@@ -258,26 +259,42 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 6000);
 
+      let res: Response | null = null;
+      let bodyText = "";
+      let err: any = null;
+
       try {
-        const res = await fetch(url, {
+        res = await fetch(url, {
           headers: {
             AccountKey: LTA_ACCOUNT_KEY,
             accept: "application/json",
           },
           signal: controller.signal,
         });
+        bodyText = await res.text();
+      } catch (fetchErr) {
+        err = fetchErr;
+      } finally {
         clearTimeout(timeoutId);
-
-        if (!res.ok) {
-          return [];
-        }
-
-        const json = await res.json();
-        return (json.value || []) as LtaCarparkRecord[];
-      } catch {
-        clearTimeout(timeoutId);
-        return [];
       }
+
+      const result = classify({
+        status: res?.status,
+        contentType: res?.headers?.get("content-type") || "",
+        bodyText,
+        err,
+        pick: (b) => b?.value,
+      });
+
+      if (result.state === "ok") {
+        return (result.body?.value || []) as LtaCarparkRecord[];
+      }
+
+      if (result.state === "refused" || result.state === "busy" || result.state === "unreachable") {
+        console.warn(`[LTA Server] Page offset ${skip} classification:`, result);
+      }
+
+      return [];
     });
 
     const results = await Promise.all(pagePromises);
@@ -292,15 +309,31 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      const govRes = await fetch("https://api.data.gov.sg/v1/transport/carpark-availability", {
-        signal: controller.signal,
-      }).catch(() => null);
+      let govRes: Response | null = null;
+      let govBodyText = "";
+      let govErr: any = null;
 
-      clearTimeout(timeoutId);
+      try {
+        govRes = await fetch("https://api.data.gov.sg/v1/transport/carpark-availability", {
+          signal: controller.signal,
+        });
+        govBodyText = await govRes.text();
+      } catch (e) {
+        govErr = e;
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
-      if (govRes && govRes.ok) {
-        const govJson = await govRes.json();
-        const items = govJson.items?.[0]?.carpark_data || [];
+      const govClass = classify({
+        status: govRes?.status,
+        contentType: govRes?.headers?.get("content-type") || "",
+        bodyText: govBodyText,
+        err: govErr,
+        pick: (b) => b?.items?.[0]?.carpark_data,
+      });
+
+      if (govClass.state === "ok") {
+        const items = govClass.body?.items?.[0]?.carpark_data || [];
         allRecords = items.map((item: any) => {
           const info = item.carpark_info?.[0] || {};
           const available = parseInt(info.lots_available || "0", 10);
@@ -314,9 +347,11 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
             Agency: "HDB",
           };
         });
+      } else {
+        console.info("[LTA Server] Data.gov.sg fallback classification:", govClass);
       }
     } catch (e) {
-      console.info("[LTA Server] Data.gov.sg fallback completed.");
+      console.info("[LTA Server] Data.gov.sg fallback completed with exception:", e);
     }
   }
 
