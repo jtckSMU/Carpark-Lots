@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Carpark, FilterState } from '../types';
+import { TalkToUs } from './TalkToUs';
 
 interface DirectoryViewProps {
   carparks: Carpark[];
@@ -366,6 +367,9 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
           </button>
         </div>
       )}
+
+      {/* Talk to Us Discussion Forum */}
+      <TalkToUs />
     </div>
   );
 };
