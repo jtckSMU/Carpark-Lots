@@ -4,6 +4,7 @@ import { SINGAPORE_HOSPITALS } from './singaporeHospitals';
 import { SINGAPORE_COMMUNITY_CENTRES } from './singaporeCommunityCentres';
 import { SINGAPORE_ATTRACTIONS_PARKS } from './singaporeAttractionsParks';
 import { SINGAPORE_COMMERCIAL_PUBLIC } from './singaporeCommercialPublic';
+import { CSV_NEW_CARPARKS, findCsvRate } from './csvRatesData';
 
 export const INITIAL_USER_PROFILE: UserProfile = {
   name: 'Jonathan Tang',
@@ -34,12 +35,34 @@ export const INITIAL_USER_PROFILE: UserProfile = {
   },
 };
 
-// Merged master directory across all Singapore parking domains: Malls, Hospitals, Community Clubs, Parks & Attractions, Business/Universities
-export const INITIAL_CARPARKS: Carpark[] = [
+const BASE_CARPARKS: Carpark[] = [
   ...SINGAPORE_SHOPPING_MALLS,
   ...SINGAPORE_HOSPITALS,
   ...SINGAPORE_COMMUNITY_CENTRES,
   ...SINGAPORE_ATTRACTIONS_PARKS,
   ...SINGAPORE_COMMERCIAL_PUBLIC,
 ];
+
+// Preserved explicit user overrides from previous instructions
+const EXPLICIT_PRESERVED_IDS = new Set(['smu_connexion_carpark', 'nus_carpark_3']);
+
+// Merged master directory across all Singapore parking domains with updated CSV rates
+export const INITIAL_CARPARKS: Carpark[] = [
+  ...BASE_CARPARKS.map((cp) => {
+    if (EXPLICIT_PRESERVED_IDS.has(cp.id)) {
+      return cp;
+    }
+    const csvRate = findCsvRate(cp.name) || findCsvRate(cp.id);
+    if (csvRate) {
+      return {
+        ...cp,
+        baseRatePerHour: csvRate.baseRatePerHour,
+        dayRates: csvRate.dayRates,
+      };
+    }
+    return cp;
+  }),
+  ...CSV_NEW_CARPARKS,
+];
+
 

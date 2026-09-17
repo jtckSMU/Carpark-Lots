@@ -275,56 +275,74 @@ export const CarparkDetailModal: React.FC<CarparkDetailModalProps> = ({
 
           {activeTab === 'rates' && (
             <div className="space-y-2.5 text-xs">
-              <div className="p-2.5 bg-[#f9f9fc] rounded-xl border border-[#e2e2e5]">
-                <h4 className="font-bold text-[#003d9b] mb-1 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[15px]">calendar_today</span>
-                  Monday - Friday (Weekdays)
-                </h4>
-                <div className="space-y-1 divide-y divide-[#eeeef0]">
-                  {carpark.dayRates.weekday.map((r, i) => (
-                    <div key={i} className="flex justify-between pt-0.5">
-                      <span className="text-[#434654]">{r.timeRange}</span>
-                      <span className="font-bold text-[#1a1c1e]">
-                        ${r.rate.toFixed(2)} {r.unit}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              {(() => {
+                const formatRateDisplay = (rate: number, unit?: string) => {
+                  if (!unit) return `$${rate.toFixed(2)}/h`;
+                  const trimmed = unit.trim();
+                  if (trimmed.startsWith('$') || /^free/i.test(trimmed) || /coupon/i.test(trimmed)) {
+                    return trimmed;
+                  }
+                  if (rate === 0) {
+                    return trimmed;
+                  }
+                  return `$${rate.toFixed(2)} ${trimmed}`;
+                };
 
-              <div className="p-2.5 bg-[#f9f9fc] rounded-xl border border-[#e2e2e5]">
-                <h4 className="font-bold text-[#003d9b] mb-1 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[15px]">weekend</span>
-                  Saturday
-                </h4>
-                <div className="space-y-1 divide-y divide-[#eeeef0]">
-                  {carpark.dayRates.saturday.map((r, i) => (
-                    <div key={i} className="flex justify-between pt-0.5">
-                      <span className="text-[#434654]">{r.timeRange}</span>
-                      <span className="font-bold text-[#1a1c1e]">
-                        ${r.rate.toFixed(2)} {r.unit}
-                      </span>
+                return (
+                  <>
+                    <div className="p-2.5 bg-[#f9f9fc] rounded-xl border border-[#e2e2e5]">
+                      <h4 className="font-bold text-[#003d9b] mb-1 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[15px]">calendar_today</span>
+                        Monday - Friday (Weekdays)
+                      </h4>
+                      <div className="space-y-1.5 divide-y divide-[#eeeef0]">
+                        {carpark.dayRates.weekday.map((r, i) => (
+                          <div key={i} className="flex justify-between items-start pt-1 gap-2">
+                            <span className="text-[#434654] font-medium shrink-0">{r.timeRange}</span>
+                            <span className="font-bold text-[#1a1c1e] text-right">
+                              {formatRateDisplay(r.rate, r.unit)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              <div className="p-2.5 bg-[#f9f9fc] rounded-xl border border-[#e2e2e5]">
-                <h4 className="font-bold text-[#003d9b] mb-1 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[15px]">wb_sunny</span>
-                  Sunday & Public Holidays
-                </h4>
-                <div className="space-y-1 divide-y divide-[#eeeef0]">
-                  {carpark.dayRates.sundayHoliday.map((r, i) => (
-                    <div key={i} className="flex justify-between pt-0.5">
-                      <span className="text-[#434654]">{r.timeRange}</span>
-                      <span className="font-bold text-[#1a1c1e]">
-                        ${r.rate.toFixed(2)} {r.unit}
-                      </span>
+                    <div className="p-2.5 bg-[#f9f9fc] rounded-xl border border-[#e2e2e5]">
+                      <h4 className="font-bold text-[#003d9b] mb-1 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[15px]">weekend</span>
+                        Saturday
+                      </h4>
+                      <div className="space-y-1.5 divide-y divide-[#eeeef0]">
+                        {carpark.dayRates.saturday.map((r, i) => (
+                          <div key={i} className="flex justify-between items-start pt-1 gap-2">
+                            <span className="text-[#434654] font-medium shrink-0">{r.timeRange}</span>
+                            <span className="font-bold text-[#1a1c1e] text-right">
+                              {formatRateDisplay(r.rate, r.unit)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+
+                    <div className="p-2.5 bg-[#f9f9fc] rounded-xl border border-[#e2e2e5]">
+                      <h4 className="font-bold text-[#003d9b] mb-1 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[15px]">wb_sunny</span>
+                        Sunday & Public Holidays
+                      </h4>
+                      <div className="space-y-1.5 divide-y divide-[#eeeef0]">
+                        {carpark.dayRates.sundayHoliday.map((r, i) => (
+                          <div key={i} className="flex justify-between items-start pt-1 gap-2">
+                            <span className="text-[#434654] font-medium shrink-0">{r.timeRange}</span>
+                            <span className="font-bold text-[#1a1c1e] text-right">
+                              {formatRateDisplay(r.rate, r.unit)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
 
               <div className="p-2 bg-[#e8e8ea] rounded-lg text-[#434654] text-[11px] flex items-center gap-1">
                 <span className="material-symbols-outlined text-[15px]">timer</span>

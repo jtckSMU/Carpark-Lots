@@ -3,6 +3,7 @@ import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import { INITIAL_CARPARKS } from "./src/data/carparks";
+import { findCsvRate } from "./src/data/csvRatesData";
 
 dotenv.config();
 
@@ -393,11 +394,12 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
         const totalLots = Math.max(availableLots, availableLots > 200 ? availableLots + 120 : availableLots > 50 ? availableLots + 80 : 150);
         const lotStatus = availableLots === 0 ? "full" : availableLots < 20 ? "limited" : "available";
         
-        // Official Singapore Statutory HDB & URA Carpark Rates
+        // Official Singapore Statutory HDB & URA Carpark Rates or exact CSV rates
+        const csvMatch = findCsvRate(formattedName) || findCsvRate(r.Development || "") || findCsvRate(r.CarParkID);
         const isCentral = area === "Orchard" || area === "Marina Bay" || area === "Central";
-        const baseRatePerHour = isCentral ? 2.40 : 1.20;
+        const baseRatePerHour = csvMatch ? csvMatch.baseRatePerHour : (isCentral ? 2.40 : 1.20);
 
-        const dayRates = {
+        const dayRates = csvMatch ? csvMatch.dayRates : {
           weekday: isCentral
             ? [
                 { timeRange: "07:00 - 17:00", rate: 2.40, unit: "/hr ($1.20/30m)" },
