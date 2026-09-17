@@ -6,8 +6,13 @@ import { INITIAL_CARPARKS } from "./src/data/carparks";
 import { findCsvRate } from "./src/data/csvRatesData";
 import { classify } from "./src/utils/classify";
 import { fetchState, STATUS } from "./src/utils/fetchState";
+import { simulated } from "./src/utils/simulate";
 
 dotenv.config();
+
+if (!process.env.ALLOW_SIMULATE && process.env.NODE_ENV !== "production") {
+  process.env.ALLOW_SIMULATE = "true";
+}
 
 const app = express();
 const PORT = 3000;
@@ -81,6 +86,14 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, AccountKey");
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
+  }
+  next();
+});
+
+// Simulation middleware for usability testing (active when ALLOW_SIMULATE === "true")
+app.use(async (req, res, next) => {
+  if (req.path.startsWith("/api") || req.path === "/health") {
+    if (await simulated(req, res)) return;
   }
   next();
 });
