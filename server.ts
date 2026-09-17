@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { INITIAL_CARPARKS } from "./src/data/carparks";
 import { findCsvRate } from "./src/data/csvRatesData";
 import { classify } from "./src/utils/classify";
+import { fetchState, STATUS } from "./src/utils/fetchState";
 
 dotenv.config();
 
@@ -256,33 +257,12 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
     const pageOffsets = [0, 500, 1000, 1500, 2000, 2500, 3000];
     const pagePromises = pageOffsets.map(async (skip) => {
       const url = `${LTA_API_URL}${skip > 0 ? `?$skip=${skip}` : ""}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
-
-      let res: Response | null = null;
-      let bodyText = "";
-      let err: any = null;
-
-      try {
-        res = await fetch(url, {
-          headers: {
-            AccountKey: LTA_ACCOUNT_KEY,
-            accept: "application/json",
-          },
-          signal: controller.signal,
-        });
-        bodyText = await res.text();
-      } catch (fetchErr) {
-        err = fetchErr;
-      } finally {
-        clearTimeout(timeoutId);
-      }
-
-      const result = classify({
-        status: res?.status,
-        contentType: res?.headers?.get("content-type") || "",
-        bodyText,
-        err,
+      const result = await fetchState(url, {
+        headers: {
+          AccountKey: LTA_ACCOUNT_KEY,
+          accept: "application/json",
+        },
+        timeoutMs: 6000,
         pick: (b) => b?.value,
       });
 
@@ -291,7 +271,7 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
       }
 
       if (result.state === "refused" || result.state === "busy" || result.state === "unreachable") {
-        console.warn(`[LTA Server] Page offset ${skip} classification:`, result);
+        console.warn(`[LTA Server] Page offset ${skip} classification (${result.ms}ms):`, result);
       }
 
       return [];
@@ -306,29 +286,8 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
   // Attempt 2: If LTA returns empty or network issue, fallback to Data.gov.sg live API
   if (allRecords.length === 0) {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-      let govRes: Response | null = null;
-      let govBodyText = "";
-      let govErr: any = null;
-
-      try {
-        govRes = await fetch("https://api.data.gov.sg/v1/transport/carpark-availability", {
-          signal: controller.signal,
-        });
-        govBodyText = await govRes.text();
-      } catch (e) {
-        govErr = e;
-      } finally {
-        clearTimeout(timeoutId);
-      }
-
-      const govClass = classify({
-        status: govRes?.status,
-        contentType: govRes?.headers?.get("content-type") || "",
-        bodyText: govBodyText,
-        err: govErr,
+      const govClass = await fetchState("https://api.data.gov.sg/v1/transport/carpark-availability", {
+        timeoutMs: 4000,
         pick: (b) => b?.items?.[0]?.carpark_data,
       });
 
