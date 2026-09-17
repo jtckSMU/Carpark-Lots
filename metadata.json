@@ -1,0 +1,10 @@
+{
+  "name": "Carpark Lots",
+  "description": "Smart parking and EV charging intelligence app for Singapore with real-time lot availability, interactive maps, rates directory, and session tracking.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
