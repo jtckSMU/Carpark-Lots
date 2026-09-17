@@ -74,6 +74,17 @@ const LTA_ACCOUNT_KEY = getNormalizedLtaKey();
 
 app.use(express.json());
 
+// Enable CORS for all cross-origin requests, health checks, and preflights
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, AccountKey");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // In-memory cache for LTA API responses
 let cachedLtaRecords: any[] = [];
 let cachedFormattedCarparks: any[] = [];
@@ -493,15 +504,85 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
 }
 
 // 1. API Health Check & DataMall Status
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    service: "Singapore Live Carpark & EV Gateway",
-    api: LTA_API_URL,
-    cachedCarparksCount: cachedFormattedCarparks.length,
-    lastUpdated: lastCacheTime > 0 ? new Date(lastCacheTime).toISOString() : null,
-  });
-});
+let lastHealthProbe: {
+  state: "ok" | "empty" | "refused" | "busy" | "unreachable";
+  upstream: number;
+  ms: number;
+  reason?: string;
+  warning?: string;
+  timestamp: number;
+} = {
+  state: "ok",
+  upstream: 200,
+  ms: 0,
+  timestamp: Date.now(),
+};
+
+async function handleHealthCheck(req: express.Request, res: express.Response) {
+  try {
+    const forceProbe = req.query.probe === "true" || req.query.live === "true" || req.query.force === "true";
+    const now = Date.now();
+    const probeAge = now - lastHealthProbe.timestamp;
+
+    // Probe upstream if stale (>15s) or forced or not yet probed
+    if (forceProbe || probeAge > 15000 || lastHealthProbe.ms === 0) {
+      const probe = await fetchState(LTA_API_URL, {
+        headers: {
+          AccountKey: LTA_ACCOUNT_KEY,
+          accept: "application/json",
+        },
+        timeoutMs: 5000,
+        pick: (b) => b?.value,
+      });
+
+      lastHealthProbe = {
+        state: probe.state,
+        upstream: probe.upstream || 200,
+        ms: probe.ms,
+        reason: probe.reason,
+        warning: probe.warning,
+        timestamp: now,
+      };
+
+      // If upstream is ok and catalog cache is empty, initiate catalog warm-up
+      if (probe.state === "ok" && cachedFormattedCarparks.length === 0) {
+        fetchLtaDataMall().catch((e) => console.warn("Background catalog warm-up:", e));
+      }
+    }
+
+    const state = lastHealthProbe.state;
+    const httpStatus = STATUS[state] || 200;
+
+    res.status(httpStatus).json({
+      state,
+      status: state === "ok" ? "ok" : state,
+      service: "Singapore Live Carpark & EV Gateway",
+      api: LTA_API_URL,
+      upstream: lastHealthProbe.upstream,
+      latencyMs: lastHealthProbe.ms,
+      cachedCarparksCount: cachedFormattedCarparks.length,
+      lastUpdated: lastCacheTime > 0 ? new Date(lastCacheTime).toISOString() : null,
+      ...(lastHealthProbe.reason ? { reason: lastHealthProbe.reason } : {}),
+      ...(lastHealthProbe.warning ? { warning: lastHealthProbe.warning } : {}),
+    });
+  } catch (err: any) {
+    const state = "unreachable";
+    const httpStatus = STATUS[state] || 504;
+    res.status(httpStatus).json({
+      state,
+      status: "error",
+      reason: err?.message || "Health check encountered an error",
+      upstream: 504,
+      cachedCarparksCount: cachedFormattedCarparks.length,
+      lastUpdated: lastCacheTime > 0 ? new Date(lastCacheTime).toISOString() : null,
+    });
+  }
+}
+
+app.get("/api/health", handleHealthCheck);
+app.post("/api/health", handleHealthCheck);
+app.get("/health", handleHealthCheck);
+app.post("/health", handleHealthCheck);
 
 // 2. Full Parsed & Formatted Carpark Catalog (All 2,600+ SG Carparks: HDB, LTA, URA)
 app.get("/api/carparks", async (req, res) => {
