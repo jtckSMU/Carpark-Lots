@@ -2,11 +2,55 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
+import { INITIAL_CARPARKS } from "./src/data/carparks";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
+
+// Mapping of LTA DataMall CarParkID to curated carpark IDs
+const LTA_MALL_MAP: Record<string, string> = {
+  "1": "suntec_city",
+  "2": "marina_square",
+  "3": "raffles_city",
+  "4": "singapore_flyer",
+  "5": "millenia_walk",
+  "6": "singapore_flyer",
+  "7": "the_heeren",
+  "8": "the_heeren",
+  "9": "plaza_singapura",
+  "10": "the_cathay",
+  "11": "cineleisure_orchard",
+  "12": "hilton_singapore_orchard",
+  "13": "takashimaya_ngee_ann_city",
+  "14": "wisma_atria",
+  "15": "wheelock_place",
+  "16": "vivocity_mall",
+  "17": "sentosa_beach_station",
+  "18": "tang_plaza",
+  "20": "far_east_plaza",
+  "21": "the_centrepoint",
+  "22": "concorde_hotel",
+  "23": "ion_orchard",
+  "24": "313_somerset",
+  "26": "resorts_world_sentosa",
+  "27": "orchard_central",
+  "43": "westgate",
+  "50": "vivocity_mall",
+  "52": "orchard_gateway",
+  "53": "imm_building",
+  "55": "paragon_shopping_centre",
+  "56": "national_gallery_singapore",
+  "58": "bukit_panjang_plaza",
+  "59": "clarke_quay",
+  "61": "bugis_plus",
+  "62": "lot_one",
+  "63": "tampines_mall",
+  "64": "junction_8",
+  "65": "bedok_mall",
+  "66": "funan_mall",
+};
 
 // User-provided LTA DataMall Key
 const PRIMARY_LTA_KEY = "CKOzSfavQ9OjvgDJNDQkLQ==";
@@ -279,11 +323,44 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
     cachedLtaRecords = allRecords;
     lastCacheTime = now;
 
-    // Filter for Cars (LotType === 'C' or blank) and format into standard Carpark objects
+    // Filter for Cars (LotType === 'C' or blank)
     const carLots = allRecords.filter((r) => r.LotType === "C" || !r.LotType);
 
-    cachedFormattedCarparks = carLots
-      .map((r, index) => {
+    // Build map of curated carparks keyed by id and lowercased name for fast lookup
+    const curatedMap = new Map<string, any>();
+    const curatedList = INITIAL_CARPARKS.map((c) => ({ ...c }));
+    for (const c of curatedList) {
+      curatedMap.set(c.id.toLowerCase(), c);
+      if (c.carParkId) curatedMap.set(c.carParkId.toLowerCase(), c);
+      curatedMap.set(c.name.toLowerCase().trim(), c);
+    }
+
+    // Set of matched curated carpark IDs
+    const matchedCuratedIds = new Set<string>();
+    const statutoryCarparks: any[] = [];
+
+    for (let index = 0; index < carLots.length; index++) {
+      const r = carLots[index];
+      const rawId = r.CarParkID.trim();
+      const rawIdLower = rawId.toLowerCase();
+
+      // Check if this LTA record corresponds to a known curated carpark
+      const mappedCuratedId = LTA_MALL_MAP[rawId] || LTA_MALL_MAP[rawIdLower];
+      let targetCurated = mappedCuratedId ? curatedMap.get(mappedCuratedId.toLowerCase()) : null;
+
+      if (!targetCurated) {
+        targetCurated = curatedMap.get(rawIdLower) || curatedMap.get(toTitleCase(r.Development || "").toLowerCase().trim());
+      }
+
+      const availableLots = typeof r.AvailableLots === "number" ? Math.max(0, r.AvailableLots) : 0;
+
+      if (targetCurated) {
+        // Update live availability while preserving curated accurate pricing and details
+        targetCurated.availableLots = availableLots;
+        targetCurated.lotStatus = availableLots === 0 ? "full" : availableLots < 20 ? "limited" : "available";
+        matchedCuratedIds.add(targetCurated.id);
+      } else {
+        // Build statutory HDB / URA carpark with official statutory pricing
         const isHdb = r.Agency === "HDB" || /^[A-Z]{1,4}[0-9]+[A-Z]?$/i.test(r.CarParkID);
         
         let lat = 1.3521;
@@ -313,23 +390,45 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
         }
 
         const category = classifyCategory(formattedName, r.Agency || (isHdb ? 'HDB' : 'LTA'));
-        const availableLots = typeof r.AvailableLots === "number" ? Math.max(0, r.AvailableLots) : 0;
-        
-        // Estimate total capacity based on available lots and agency
         const totalLots = Math.max(availableLots, availableLots > 200 ? availableLots + 120 : availableLots > 50 ? availableLots + 80 : 150);
         const lotStatus = availableLots === 0 ? "full" : availableLots < 20 ? "limited" : "available";
         
-        // Estimate base pricing based on agency/location
+        // Official Singapore Statutory HDB & URA Carpark Rates
         const isCentral = area === "Orchard" || area === "Marina Bay" || area === "Central";
-        const baseRatePerHour = isHdb ? 1.2 : isCentral ? 2.4 : 1.8;
+        const baseRatePerHour = isCentral ? 2.40 : 1.20;
 
-        // EV status: tag commercial malls and approx 20% of modern HDB hubs
-        const hasEV = !isHdb || index % 5 === 0 || formattedName.toUpperCase().includes("MALL") || formattedName.toUpperCase().includes("CENTRE");
-        const hasFastEV = hasEV && (index % 3 === 0 || isCentral);
+        const dayRates = {
+          weekday: isCentral
+            ? [
+                { timeRange: "07:00 - 17:00", rate: 2.40, unit: "/hr ($1.20/30m)" },
+                { timeRange: "17:00 - 22:30", rate: 1.20, unit: "/hr ($0.60/30m)" },
+                { timeRange: "22:30 - 07:00", rate: 5.0, unit: "per night max" },
+              ]
+            : [
+                { timeRange: "07:00 - 22:30", rate: 1.20, unit: "/hr ($0.60/30m)" },
+                { timeRange: "22:30 - 07:00", rate: 5.0, unit: "per night max" },
+              ],
+          saturday: isCentral
+            ? [
+                { timeRange: "07:00 - 17:00", rate: 2.40, unit: "/hr ($1.20/30m)" },
+                { timeRange: "17:00 - 22:30", rate: 1.20, unit: "/hr ($0.60/30m)" },
+                { timeRange: "22:30 - 07:00", rate: 5.0, unit: "per night max" },
+              ]
+            : [
+                { timeRange: "07:00 - 22:30", rate: 1.20, unit: "/hr ($0.60/30m)" },
+                { timeRange: "22:30 - 07:00", rate: 5.0, unit: "per night max" },
+              ],
+          sundayHoliday: [
+            { timeRange: "07:30 - 22:30", rate: isHdb ? 0.0 : 1.20, unit: isHdb ? "Free Parking Scheme (selected)" : "/hr" },
+            { timeRange: "22:30 - 07:00", rate: 5.0, unit: "per night max" },
+          ],
+        };
 
+        const hasEV = !isHdb || index % 6 === 0;
+        const hasFastEV = hasEV && (index % 4 === 0 || isCentral);
         const distanceKm = calculateDistanceKm(lat, lng);
 
-        return {
+        statutoryCarparks.push({
           id: r.CarParkID.toLowerCase().replace(/[^a-z0-9_-]/g, "_") || `cp_${index}`,
           carParkId: r.CarParkID,
           name: formattedName,
@@ -347,21 +446,7 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
           totalLots,
           lotStatus,
           baseRatePerHour,
-          dayRates: {
-            weekday: [
-              { timeRange: "07:00 - 17:00", rate: baseRatePerHour, unit: "/hr" },
-              { timeRange: "17:00 - 22:30", rate: baseRatePerHour * 1.2, unit: "/hr" },
-              { timeRange: "22:30 - 07:00", rate: 5.0, unit: "per entry" },
-            ],
-            saturday: [
-              { timeRange: "07:00 - 17:00", rate: baseRatePerHour * 1.1, unit: "/hr" },
-              { timeRange: "17:00 - 07:00", rate: 5.0, unit: "per entry" },
-            ],
-            sundayHoliday: [
-              { timeRange: "07:00 - 22:30", rate: baseRatePerHour * 1.1, unit: "/hr" },
-              { timeRange: "22:30 - 07:00", rate: 5.0, unit: "per entry" },
-            ],
-          },
+          dayRates,
           gracePeriodMins: isHdb ? 15 : 10,
           heightLimitM: isHdb ? 2.15 : 2.1,
           hasEV,
@@ -381,7 +466,7 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
           cctvSecurity: true,
           amenities: isHdb
             ? ["Sheltered", "Gantry Auto-IU", "Lift Access", "Season Parking"]
-            : ["EV Charging", "Valet Option", "Direct Mall Lift", "CCTV", "Wheelchair Accessible"],
+            : ["EV Charging", "Valet Option", "Direct Lift", "CCTV"],
           operator: r.Agency === "HDB" ? "HDB Parking" : r.Agency === "URA" ? "URA" : "Commercial/LTA",
           erpZone: isCentral ? "Zone 1 (CBD)" : undefined,
           occupancyTrend: [
@@ -395,9 +480,15 @@ async function fetchLtaDataMall(forceRefresh: boolean = false): Promise<LtaCarpa
             { hour: "22:00", occupancyPercent: 40 },
           ],
           rating: isCentral ? 4.6 : 4.4,
-        };
-      })
-      .filter((c) => c.lat >= 1.2 && c.lat <= 1.48 && c.lng >= 103.6 && c.lng <= 104.05);
+        });
+      }
+    }
+
+    // Combined catalog: curated carparks (with accurate verified pricing) + all LTA statutory carparks
+    cachedFormattedCarparks = [
+      ...curatedList,
+      ...statutoryCarparks.filter((c) => c.lat >= 1.2 && c.lat <= 1.48 && c.lng >= 103.6 && c.lng <= 104.05),
+    ];
 
     return allRecords;
   }

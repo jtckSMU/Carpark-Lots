@@ -69,27 +69,17 @@ export default function App() {
     }
   }, [activeSession]);
 
-  // Fetch full Singapore carpark catalog (all 2,000+ carparks from LTA/HDB/URA + Shopping Malls)
+  // Fetch full Singapore carpark catalog (curated accurate catalog + all 2,000+ LTA/HDB/URA carparks)
   const fetchCarparkCatalog = useCallback(async () => {
     try {
       const res = await fetch('/api/carparks');
       if (!res.ok) return;
       const json = await res.json();
       if (json.carparks && Array.isArray(json.carparks) && json.carparks.length > 0) {
-        // Keep all shopping malls at the forefront, and append all LTA carparks without duplication
-        const existingIds = new Set(INITIAL_CARPARKS.map((m) => m.id.toLowerCase()));
-        const existingNames = new Set(INITIAL_CARPARKS.map((m) => m.name.toLowerCase().trim()));
-
-        const additionalCarparks = json.carparks.filter((c: Carpark) => {
-          const cid = (c.id || '').toLowerCase();
-          const cname = (c.name || '').toLowerCase().trim();
-          return !existingIds.has(cid) && !existingNames.has(cname);
-        });
-
-        setCarparks([...INITIAL_CARPARKS, ...additionalCarparks]);
+        setCarparks(json.carparks);
       }
     } catch (err) {
-      console.warn('Could not fetch full carpark catalog, using built-in:', err);
+      console.warn('Could not fetch full carpark catalog, using built-in curated:', err);
     }
   }, []);
 
@@ -117,10 +107,45 @@ export default function App() {
           }
         });
 
+        // Mall mapping for LTA numeric IDs
+        const mallIdLookup: Record<string, string> = {
+          suntec_city: '1',
+          marina_square: '2',
+          raffles_city: '3',
+          millenia_walk: '5',
+          plaza_singapura: '9',
+          takashimaya_ngee_ann_city: '13',
+          wisma_atria: '14',
+          vivocity_mall: '16',
+          ion_orchard: '23',
+          '313_somerset': '24',
+          resorts_world_sentosa: '26',
+          westgate: '43',
+          orchard_gateway: '52',
+          imm_building: '53',
+          paragon_shopping_centre: '55',
+          bukit_panjang_plaza: '58',
+          bugis_plus: '61',
+          lot_one: '62',
+          tampines_mall: '63',
+          junction_8: '64',
+          bedok_mall: '65',
+          funan_mall: '66',
+        };
+
         setCarparks((prevCarparks) => {
           return prevCarparks.map((cp) => {
             const rawId = (cp as any).carParkId || cp.id;
-            const updatedLots = lotMap.get(rawId.toLowerCase()) ?? lotMap.get(cp.id.toLowerCase());
+            const ltaNumericId = mallIdLookup[cp.id];
+            
+            let updatedLots: number | undefined;
+            if (ltaNumericId && lotMap.has(ltaNumericId.toLowerCase())) {
+              updatedLots = lotMap.get(ltaNumericId.toLowerCase());
+            } else if (lotMap.has(rawId.toLowerCase())) {
+              updatedLots = lotMap.get(rawId.toLowerCase());
+            } else if (lotMap.has(cp.id.toLowerCase())) {
+              updatedLots = lotMap.get(cp.id.toLowerCase());
+            }
 
             if (typeof updatedLots === 'number') {
               return {
