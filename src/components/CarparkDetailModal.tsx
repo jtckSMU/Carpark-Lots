@@ -30,6 +30,14 @@ export const CarparkDetailModal: React.FC<CarparkDetailModalProps> = ({
   const [showSessionStarter, setShowSessionStarter] = useState(false);
   const [noteText, setNoteText] = useState(userProfile.savedNotes[carpark.id] || '');
   const [noteSaved, setNoteSaved] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
+
+  const handleCopyAddress = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    navigator.clipboard.writeText(carpark.address);
+    setCopiedAddress(true);
+    setTimeout(() => setCopiedAddress(false), 2000);
+  };
 
   const isFull = carpark.availableLots === 0;
   const occupancyPercent = Math.round(
@@ -76,10 +84,10 @@ export const CarparkDetailModal: React.FC<CarparkDetailModalProps> = ({
             <h2 className="text-lg sm:text-xl font-bold text-[#1a1c1e] leading-tight">
               {carpark.name}
             </h2>
-            <p className="text-xs text-[#737685] mt-0.5 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[13px]">location_on</span>
-              <span className="truncate">{carpark.address}</span>
-            </p>
+            <div className="text-xs text-[#434654] mt-1 flex items-start gap-1 leading-snug">
+              <span className="material-symbols-outlined text-[15px] text-[#003d9b] shrink-0 mt-0.5">location_on</span>
+              <span className="font-semibold text-[#1a1c1e] select-all break-words">{carpark.address}</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-1">
@@ -157,6 +165,52 @@ export const CarparkDetailModal: React.FC<CarparkDetailModalProps> = ({
               <span className="material-symbols-outlined text-[12px]">timer</span>
               {carpark.gracePeriodMins}m Grace
             </div>
+          </div>
+        </div>
+
+        {/* Dedicated Address & Fast Navigation Strip */}
+        <div className="px-4 py-2.5 bg-[#f3f3f6] border-b border-[#e2e2e5] flex items-center justify-between gap-2.5">
+          <div className="flex items-start gap-2 min-w-0 flex-1">
+            <div className="w-7 h-7 rounded-lg bg-white border border-[#e2e2e5] flex items-center justify-center text-[#003d9b] shrink-0 mt-0.5 shadow-2xs">
+              <span className="material-symbols-outlined text-[16px]">pin_drop</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] uppercase font-bold tracking-wider text-[#737685] flex items-center gap-1.5">
+                <span>Carpark Address</span>
+                {carpark.distanceKm !== undefined && (
+                  <span className="text-[#003d9b] font-semibold">• {carpark.distanceKm} km away</span>
+                )}
+              </div>
+              <div className="text-xs font-semibold text-[#1a1c1e] select-all leading-snug break-words">
+                {carpark.address}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={handleCopyAddress}
+              className="px-2.5 py-1.5 bg-white hover:bg-[#eeeef0] active:scale-95 text-[#1a1c1e] text-[11px] font-semibold rounded-xl border border-[#e2e2e5] transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
+              title="Copy address to clipboard"
+            >
+              <span className="material-symbols-outlined text-[14px] text-[#003d9b]">
+                {copiedAddress ? 'check' : 'content_copy'}
+              </span>
+              <span>{copiedAddress ? 'Copied' : 'Copy'}</span>
+            </button>
+
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                carpark.name + ', ' + carpark.address
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1.5 bg-[#003d9b] hover:bg-[#002d73] active:scale-95 text-white text-[11px] font-semibold rounded-xl transition-all flex items-center gap-1 shadow-2xs"
+              title="Get directions in Google Maps"
+            >
+              <span className="material-symbols-outlined text-[14px]">directions</span>
+              <span>Directions</span>
+            </a>
           </div>
         </div>
 

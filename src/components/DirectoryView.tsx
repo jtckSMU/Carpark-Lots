@@ -242,6 +242,12 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
                     <h3 className="font-bold text-sm sm:text-base text-[#1a1c1e] group-hover:text-[#003d9b] transition-colors leading-tight">
                       {carpark.name}
                     </h3>
+                    <p className="text-xs text-[#737685] mt-1 flex items-center gap-1 leading-snug">
+                      <span className="material-symbols-outlined text-[13px] text-[#003d9b] shrink-0">
+                        location_on
+                      </span>
+                      <span className="line-clamp-1">{carpark.address}</span>
+                    </p>
                   </div>
 
                   <button

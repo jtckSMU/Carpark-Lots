@@ -73,6 +73,12 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                     <h3 className="font-bold text-sm sm:text-base text-[#1a1c1e] hover:text-[#003d9b] transition-colors">
                       {carpark.name}
                     </h3>
+                    <p className="text-xs text-[#737685] mt-0.5 flex items-center gap-1 leading-snug">
+                      <span className="material-symbols-outlined text-[13px] text-[#003d9b] shrink-0">
+                        location_on
+                      </span>
+                      <span className="line-clamp-1">{carpark.address}</span>
+                    </p>
                   </div>
 
                   {/* Vacancy Badge */}
