@@ -201,8 +201,15 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
       </div>
 
       {/* Carpark Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {displayedCarparks.map((carpark) => {
+      {sorted.length === 0 ? (
+        <div className="bg-white rounded-2xl p-10 border border-[#e2e2e5] text-center my-4">
+          <span className="material-symbols-outlined text-4xl text-[#737685] mb-2">local_parking</span>
+          <p className="text-sm font-semibold text-[#1a1c1e]">No carparks available</p>
+          <p className="text-xs text-[#737685] mt-1">There are currently no carparks matching the selected criteria.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {displayedCarparks.map((carpark) => {
           const isFull = carpark.availableLots === 0;
           const isLimited = carpark.availableLots > 0 && carpark.availableLots < 20;
           const catMeta = getCategoryMeta(carpark.category, carpark.agency);
@@ -345,6 +352,7 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
           );
         })}
       </div>
+      )}
 
       {/* Load More Button */}
       {sorted.length > displayCount && (

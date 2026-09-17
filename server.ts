@@ -6,13 +6,9 @@ import { INITIAL_CARPARKS } from "./src/data/carparks";
 import { findCsvRate } from "./src/data/csvRatesData";
 import { classify } from "./src/utils/classify";
 import { fetchState, STATUS } from "./src/utils/fetchState";
-import { simulated } from "./src/utils/simulate";
+import { simulated } from "./lib/simulate.js";
 
 dotenv.config();
-
-if (!process.env.ALLOW_SIMULATE && process.env.NODE_ENV !== "production") {
-  process.env.ALLOW_SIMULATE = "true";
-}
 
 const app = express();
 const PORT = 3000;
@@ -86,14 +82,6 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, AccountKey");
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
-  }
-  next();
-});
-
-// Simulation middleware for usability testing (active when ALLOW_SIMULATE === "true")
-app.use(async (req, res, next) => {
-  if (req.path.startsWith("/api") || req.path === "/health") {
-    if (await simulated(req, res)) return;
   }
   next();
 });
@@ -575,6 +563,7 @@ async function handleHealthCheck(req: express.Request, res: express.Response) {
       latencyMs: lastHealthProbe.ms,
       cachedCarparksCount: cachedFormattedCarparks.length,
       lastUpdated: lastCacheTime > 0 ? new Date(lastCacheTime).toISOString() : null,
+      simulateAllowed: process.env.ALLOW_SIMULATE === "true",
       ...(lastHealthProbe.reason ? { reason: lastHealthProbe.reason } : {}),
       ...(lastHealthProbe.warning ? { warning: lastHealthProbe.warning } : {}),
     });
@@ -588,6 +577,7 @@ async function handleHealthCheck(req: express.Request, res: express.Response) {
       upstream: 504,
       cachedCarparksCount: cachedFormattedCarparks.length,
       lastUpdated: lastCacheTime > 0 ? new Date(lastCacheTime).toISOString() : null,
+      simulateAllowed: process.env.ALLOW_SIMULATE === "true",
     });
   }
 }
@@ -599,6 +589,7 @@ app.post("/health", handleHealthCheck);
 
 // 2. Full Parsed & Formatted Carpark Catalog (All 2,600+ SG Carparks: HDB, LTA, URA)
 app.get("/api/carparks", async (req, res) => {
+  if (await simulated(req, res)) return;
   try {
     const { area, category, evOnly, q } = req.query;
     await fetchLtaDataMall();
@@ -631,6 +622,7 @@ app.get("/api/carparks", async (req, res) => {
 
 // 3. Real-time Live Lot Updates endpoint
 app.get("/api/carparks/live", async (req, res) => {
+  if (await simulated(req, res)) return;
   try {
     const rawData = await fetchLtaDataMall();
     const carLotsOnly = rawData.filter((r) => r.LotType === "C" || !r.LotType);
@@ -648,6 +640,7 @@ app.get("/api/carparks/live", async (req, res) => {
 
 // 4. Force Live Refresh endpoint
 app.post("/api/carparks/refresh", async (req, res) => {
+  if (await simulated(req, res)) return;
   try {
     await fetchLtaDataMall(true);
     res.json({
@@ -662,6 +655,7 @@ app.post("/api/carparks/refresh", async (req, res) => {
 
 // 5. Single Carpark Details
 app.get("/api/carparks/:id", async (req, res) => {
+  if (await simulated(req, res)) return;
   try {
     const id = req.params.id.toLowerCase();
     await fetchLtaDataMall();
@@ -681,6 +675,7 @@ app.get("/api/carparks/:id", async (req, res) => {
 
 // 6. Live Statistics Summary
 app.get("/api/stats", async (req, res) => {
+  if (await simulated(req, res)) return;
   try {
     await fetchLtaDataMall();
     const totalCarparks = cachedFormattedCarparks.length;

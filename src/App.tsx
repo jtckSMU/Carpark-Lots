@@ -69,12 +69,31 @@ export default function App() {
     }
   }, [activeSession]);
 
+  // Extract only the simulate value from the page address
+  const getSimulateQuery = () => {
+    if (typeof window === 'undefined') return '';
+    const params = new URLSearchParams(window.location.search);
+    const sim = params.get('simulate');
+    return sim ? `simulate=${encodeURIComponent(sim)}` : '';
+  };
+
   // Fetch full Singapore carpark catalog (curated accurate catalog + all 2,000+ LTA/HDB/URA carparks)
   const fetchCarparkCatalog = useCallback(async () => {
     try {
-      const res = await fetch('/api/carparks');
-      if (!res.ok) return;
+      const sim = getSimulateQuery();
+      const url = sim ? `/api/carparks?${sim}` : '/api/carparks';
+      const res = await fetch(url);
+      if (!res.ok) {
+        if (sim) {
+          setCarparks([]);
+        }
+        return;
+      }
       const json = await res.json();
+      if (json.state === 'empty' || (Array.isArray(json.data) && json.data.length === 0 && json.state)) {
+        setCarparks([]);
+        return;
+      }
       if (json.carparks && Array.isArray(json.carparks) && json.carparks.length > 0) {
         setCarparks(json.carparks);
       }
@@ -86,7 +105,9 @@ export default function App() {
   // Real-time synchronization with Singapore LTA DataMall v2 API
   const fetchLtaLiveCarparks = useCallback(async () => {
     try {
-      const res = await fetch('/api/carparks/live');
+      const sim = getSimulateQuery();
+      const url = sim ? `/api/carparks/live?${sim}` : '/api/carparks/live';
+      const res = await fetch(url);
       if (!res.ok) return;
       const json = await res.json();
       const ltaRecords: Array<{
